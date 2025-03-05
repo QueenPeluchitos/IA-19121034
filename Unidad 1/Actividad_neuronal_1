@@ -1,0 +1,26 @@
+05 de marzo 2025 ----------------------- Diana Alejandra González Damián
+| ----------------------------------------------------------------------------- |
+Modelar una red neuronal que pueda jugar al 5 en linea sin gravedad en un tablero de 20x20
+-Definir el tipo de red neuronal y describir cada una de sus partes
+-Definir los patrones a utilizar
+-Definir función de activación es necesaria para este problema
+-Definir numero de entradas
+-¿Qué valores a la salida de la red se podrían esperar?
+-¿Cuáles son los valores máximos que puede tener el bias?
+
+[1 Neurona] 2 entradas [color de ficha] sigmoide
+[5 Neuronas] capas ocultas [procesar donde cayó la ficha]
+[1 Neurona] 2 salidas [ganó, no ganó] sigmoide
+
+| Ficha roja | Ficha azul | Ganó |
+| ---------- | ---------- | ---- |
+| 1          | 1          | 0    | 
+| 1          | 0          | 1    |
+| 0          | 1          | 1    |
+| 0          | 0          | 0    |
+
+Se puede esperar para ganar ≥ 0.9
+
+Para no haber ganado < 0.9
+
+Los valores máximos del bias pueden ser 0 y 1
