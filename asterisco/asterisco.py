@@ -50,6 +50,9 @@ class Nodo:
 
     def es_fin(self):
         return self.color == PURPURA
+    
+    def restablecer(self):
+        self.color = BLANCO
 
     #Estados de paredes, inicio y fin
     def hacer_inicio(self):
@@ -101,8 +104,8 @@ def vecinos(nodo, grid):
     
     #valores de los movimientos
     movimientos = [
-        (-1, 0, 10),  (1, 0, 10), (0, -1, 10), (0, 1, 10), # izquierda, derecha, abajo, arriba
-        (-1, -1, 14), (-1, 1, 14), (1, -1, 14), (1, 1, 14) # diagonales de izquierda abajo, izquierda arriba, derecha abajo, derecha arriba
+        (-1, 0, 1),  (1, 0, 1), (0, -1, 1), (0, 1, 1), # izquierda, derecha, abajo, arriba
+        (-1, -1, 1.4), (-1, 1, 1.4), (1, -1, 1.4), (1, 1, 1.4) # diagonales de izquierda abajo, izquierda arriba, derecha abajo, derecha arriba
     ]
     for df, dc, costo in movimientos: 
         nueva_fila, nueva_col = fila + df, col + dc
@@ -149,7 +152,7 @@ def algoritmo_heuristico(grid, inicio, fin, ventana, ancho): #Algoritmo A*
     visitados = {inicio}
     contador = 2
 
-    while not open_set.empty(): ## Mientras haya nodos abiertos
+    while not open_set.empty(): # Mientras haya nodos abiertos
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -201,14 +204,6 @@ def main(ventana, ancho):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 corriendo = False
-
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_r and pygame.key.get_mods() & pygame.KMOD_CTRL: 
-                    for fila in grid:
-                        for nodo in fila:
-                            nodo.restablecer()
-                    inicio = None
-                    fin = None
 
             if pygame.mouse.get_pressed()[0]:  # Click izquierdo
                 pos = pygame.mouse.get_pos()
