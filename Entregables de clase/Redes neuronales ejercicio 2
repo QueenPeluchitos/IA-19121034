@@ -1,0 +1,27 @@
+Diana Alejandra González Damián 19121034
+
+Modelar el tipo de red neuronal que pueda identificar emociones a través de los valores obtenidos de las landmarks que genera mediapipe.
+1.Definir el tipo de red neuronal y describir cada una de sus partes.
+2.Definir los patrones a utilizar.
+3.Definir función de activación es necesaria para este problema.
+4.Definir el número máximo de entradas.
+5.¿Qué valores a la salida de la red se podrían esperar?
+6.¿Cuáles son los valores máximos que pueden tener el bias?
+
+Respuestas
+
+1.Convolucional ya que se manejan imágenes para extraer la información. 
+Entradas: Reciben los valores de las landmarks 
+Ocultas: ReLu para patrones
+Salidas: Sigmoide para emociones
+
+2.Distancia entre los puntos de cejas, boca, ojos, nariz.
+Diferentes emociones como Feliz, enojado, sorprendido, triste o neutral.
+
+3.ReLu y sigmoide.
+
+4.45 entradas
+
+5.Los valores de salida serían las emociones, feliz, triste, enojado, sorprendido o neutral, según los valos máximos y minimos que se le dio para que cayera en cada clasificación.
+
+6.-1 y 1, creo.
