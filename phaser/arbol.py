@@ -1,10 +1,14 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, export_graphviz
+import os
 import graphviz
 
+os.environ["PATH"] += os.pathsep + "C:/Program Files (x86)/Graphviz/bin"
+
+
 # Cargar el dataset
-file_path = 'dataset1.csv'
+file_path = 'Dataset3.csv'
 dataset = pd.read_csv(file_path)
 
 # Eliminar columnas innecesarias (como la vacía "Unnamed: 3")
