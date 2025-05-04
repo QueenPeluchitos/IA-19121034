@@ -1,5 +1,8 @@
 import pygame
 import random
+import tensorflow as tf
+import numpy as np
+import pickle
 
 # Inicializar Pygame
 pygame.init()
@@ -69,6 +72,26 @@ bala_disparada = False
 # Variables para el fondo en movimiento
 fondo_x1 = 0
 fondo_x2 = w
+
+# Cargar el modelo entrenado (modo automático)
+modelo = tf.keras.models.load_model('modelo_salto.keras')
+
+# Función para decidir si saltar usando el modelo
+def decision_auto():
+    global jugador, bala, salto, en_suelo, velocidad_bala
+
+    if not en_suelo:
+        return
+
+    velocidad = velocidad_bala
+    distancia = abs(jugador.x - bala.x)
+
+    entrada = np.array([[velocidad, distancia]], dtype=np.float32)
+    prediccion = modelo.predict(entrada, verbose=0)[0][0]
+
+    if prediccion > 0.5:  # Umbral de decisión
+        salto = True
+        en_suelo = False
 
 # Función para disparar la bala
 def disparar_bala():
@@ -224,6 +247,12 @@ def main():
                     exit()
 
         if not pausa:
+            # Modo automático
+            if modo_auto:
+                decision_auto()
+                if salto:
+                    manejar_salto()
+
             # Modo manual: el jugador controla el salto
             if not modo_auto:
                 if salto:
