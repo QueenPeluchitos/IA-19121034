@@ -13,14 +13,14 @@ w, h = 800, 400
 pantalla = pygame.display.set_mode((w, h))
 pygame.display.set_caption("Juego: Disparo de Bala, Salto, Nave y Menú")
 
-# Colores
+# Coloritos
 BLANCO = (255, 255, 255)
 NEGRO = (0, 0, 0)
 VERDE_TEXTO = (100, 255, 100)
 ROJO_TEXTO = (255, 100, 100)
 
-# Variables del jugador, bala, nave, fondo, etc.
-jugador_rect = None # Renombrado para evitar confusión con la variable 'jugador' en algunas funciones
+# Variables del jugador, bala, nave, fondo y menú
+jugador_rect = None 
 bala_rect = None
 fondo = None
 nave_rect = None
@@ -41,10 +41,10 @@ fuente_pequena = pygame.font.SysFont('Arial', 18)
 menu_activo = True
 modo_auto = False  # Indica si el modo de juego es automático
 
-# Lista para guardar los datos de velocidad, distancia y salto (target)
+# Lista para guardar los datos de velocidad, distancia y salto
 datos_modelo = []
 
-# Cargar las imágenes (asegúrate de que las rutas a 'assets' sean correctas)
+# Carga las imágenes
 try:
     jugador_frames = [
         pygame.image.load('assets/sprites/mono_frame_1.png'),
@@ -55,7 +55,6 @@ try:
     bala_img = pygame.image.load('assets/sprites/purple_ball.png')
     fondo_img = pygame.image.load('assets/game/fondo2.png')
     nave_img = pygame.image.load('assets/game/ufo.png')
-    # menu_img = pygame.image.load('assets/game/menu.png') # No se usa en el código actual para el menú
 except pygame.error as e:
     print(f"Error al cargar imágenes: {e}")
     print("Asegúrate de que la carpeta 'assets' esté en el mismo directorio que el script y contenga las imágenes.")
@@ -63,14 +62,12 @@ except pygame.error as e:
     exit()
 
 
-# Escalar la imagen de fondo para que coincida con el tamaño de la pantalla
 fondo_img = pygame.transform.scale(fondo_img, (w, h))
 
 # Crear el rectángulo del jugador y de la bala
 jugador_rect = pygame.Rect(50, h - 100, 32, 48) # x, y, ancho, alto
 bala_rect = pygame.Rect(w - 50, h - 90, 16, 16)
 nave_rect = pygame.Rect(w - 100, h - 100, 64, 64)
-# menu_rect = pygame.Rect(w // 2 - 135, h // 2 - 90, 270, 180)  # Tamaño del menú (no se usa activamente)
 
 # Variables para la animación del jugador
 current_frame = 0
@@ -86,7 +83,7 @@ fondo_x1 = 0
 fondo_x2 = w
 
 # Cargar el modelo entrenado (modo automático)
-modelo = None # Inicializar modelo como None
+modelo = None 
 MODELO_PATH = 'modelo_salto.keras'
 try:
     if os.path.exists(MODELO_PATH):
@@ -94,7 +91,7 @@ try:
         print(f"Modelo '{MODELO_PATH}' cargado exitosamente.")
     else:
         print(f"Advertencia: Archivo de modelo '{MODELO_PATH}' no encontrado. El modo automático no funcionará hasta que se entrene un modelo.")
-except Exception as e: # Captura excepciones más generales de Keras/TF durante la carga
+except Exception as e: # Captura excepciones más generales de Keras
     print(f"Advertencia: No se pudo cargar '{MODELO_PATH}'. El modo automático no funcionará. Error: {e}")
 
 
@@ -103,16 +100,17 @@ def decision_auto():
     global jugador_rect, bala_rect, salto, en_suelo, velocidad_bala_actual, modelo
 
     if not modelo:
-        # print("Modo automático no disponible: modelo no cargado o no válido.") # Puede ser muy verboso
+        # print("Modo automático no disponible: modelo no cargado o no válido.") 
         return
 
     if not en_suelo:
         return
 
-    velocidad = float(velocidad_bala_actual) # Asegurar que sea float
-    distancia = float(abs(jugador_rect.x - bala_rect.x)) # Asegurar que sea float
+    # Asegurar que sea float
+    velocidad = float(velocidad_bala_actual) 
+    distancia = float(abs(jugador_rect.x - bala_rect.x)) 
 
-    # El modelo espera una entrada de la forma [[velocidad, distancia]]
+    # El modelo espera una entrada de la forma
     entrada = np.array([[velocidad, distancia]], dtype=np.float32)
     try:
         prediccion = modelo.predict(entrada, verbose=0)[0][0]
@@ -120,7 +118,6 @@ def decision_auto():
         if prediccion > 0.5:  # Umbral de decisión
             salto = True
             en_suelo = False
-            # No reiniciar salto_altura_actual aquí, se maneja en manejar_salto
     except Exception as e:
         print(f"Error durante la predicción del modelo: {e}")
 
@@ -144,16 +141,16 @@ def manejar_salto():
 
     if salto:
         jugador_rect.y -= salto_altura_actual  # Mover al jugador hacia arriba
-        salto_altura_actual -= gravedad  # Aplicar gravedad (reduce la velocidad del salto)
+        salto_altura_actual -= gravedad  # Aplicar gravedad
 
         # Si el jugador llega al suelo, detener el salto
-        if jugador_rect.y >= h - 100: # Asumiendo que h-100 es el suelo
+        if jugador_rect.y >= h - 100:
             jugador_rect.y = h - 100
             salto = False
             salto_altura_actual = salto_altura_inicial  # Restablecer la velocidad de salto
             en_suelo = True
-    elif not en_suelo and jugador_rect.y < h - 100 : # Si no está saltando pero está en el aire (cayendo)
-        jugador_rect.y -= salto_altura_actual # Sigue aplicando el movimiento vertical (que será negativo por la gravedad)
+    elif not en_suelo and jugador_rect.y < h - 100 : # Si no está saltando pero está en el aire
+        jugador_rect.y -= salto_altura_actual # Sigue aplicando el movimiento vertical
         salto_altura_actual -= gravedad
         if jugador_rect.y >= h - 100:
             jugador_rect.y = h - 100
@@ -209,8 +206,6 @@ def guardar_datos_para_modelo():
     global jugador_rect, bala_rect, velocidad_bala_actual, salto, datos_modelo
     distancia = abs(jugador_rect.x - bala_rect.x)
     # Captura si un salto fue INICIADO en este frame para evitar la bala
-    # Esto es una simplificación. Idealmente, se registraría la decisión en el momento clave.
-    # Por ahora, si está en el aire (salto=True), lo consideramos un intento de esquivar.
     salto_decision = 1 if salto else 0
     datos_modelo.append((float(velocidad_bala_actual), float(distancia), int(salto_decision)))
 
@@ -221,7 +216,6 @@ def toggle_pausa():
     pausa = not pausa
     if pausa:
         print("Juego pausado.")
-        # No guardamos datos aquí, se guardan al salir o al entrenar.
     else:
         print("Juego reanudado.")
 
@@ -237,14 +231,13 @@ def guardar_datos_a_archivo():
     else:
         print("No hay nuevos datos para guardar.")
 
-# Función para mostrar el menú y seleccionar el modo de juego
+# Menú
 def mostrar_menu():
     global menu_activo, modo_auto, modelo
     menu_activo = True
 
     while menu_activo:
         pantalla.fill(NEGRO) # Limpiar pantalla para el menú
-        # pantalla.blit(menu_img, (menu_rect.x, menu_rect.y)) # Si tuvieras una imagen de menú
         
         texto_titulo = fuente_grande.render("MENU PRINCIPAL", True, BLANCO)
         pantalla.blit(texto_titulo, (w // 2 - texto_titulo.get_width() // 2, h // 4))
@@ -281,7 +274,6 @@ def mostrar_menu():
                         menu_activo = False
                     else:
                         print("No se puede iniciar Modo Automático: El modelo no está cargado.")
-                        # Podrías mostrar un mensaje en pantalla aquí también
                 elif evento.key == pygame.K_m:
                     modo_auto = False
                     menu_activo = False
@@ -295,11 +287,10 @@ def mostrar_menu():
                             print(f"Modelo '{MODELO_PATH}' recargado exitosamente después del entrenamiento.")
                         else:
                             print(f"Archivo de modelo '{MODELO_PATH}' no encontrado después del entrenamiento.")
-                            modelo = None # Asegurarse de que esté None si no se pudo cargar
+                            modelo = None 
                     except Exception as e:
                         print(f"Error al recargar modelo después del entrenamiento: {e}")
                         modelo = None
-                    # El menú se redibujará con el nuevo estado del modelo
                 elif evento.key == pygame.K_q:
                     guardar_datos_a_archivo()
                     pygame.quit()
@@ -310,8 +301,6 @@ def reiniciar_juego_a_menu():
     global menu_activo, jugador_rect, bala_rect, nave_rect, bala_disparada, salto, en_suelo, salto_altura_actual, salto_altura_inicial
     
     print("Volviendo al menú...")
-    # No guardamos datos aquí explícitamente, se guardan al salir o con 'T'
-    # print("Datos recopilados para el modelo en esta sesión: ", datos_modelo) # Puede ser verboso
 
     menu_activo = True
     jugador_rect.x, jugador_rect.y = 50, h - 100
@@ -321,16 +310,16 @@ def reiniciar_juego_a_menu():
     salto = False
     en_suelo = True
     salto_altura_actual = salto_altura_inicial
-    # mostrar_menu() # Se llamará desde el bucle principal si menu_activo es True
+    # mostrar menu
 
+    # Aquí empieza el entrenamiento del modelo
 def entrenar_modelo_desde_datos():
     global datos_modelo, modelo # Para actualizar la variable global del modelo
     
     datos_para_entrenamiento = []
-    # Opción 1: Usar datos de la sesión actual
-    # datos_para_entrenamiento.extend(datos_modelo)
+    # Usar datos de la sesión actual
 
-    # Opción 2 (Recomendado): Cargar todos los datos guardados previamente
+    # Cargar todos los datos guardados previamente
     try:
         with open('datos_entrenamiento.pkl', 'rb') as f:
             datos_cargados_archivo = pickle.load(f)
@@ -342,7 +331,6 @@ def entrenar_modelo_desde_datos():
         print(f"Error al cargar datos desde archivo: {e}")
 
     # Añadir datos de la sesión actual si no están ya guardados
-    # (esto podría llevar a duplicados si no se maneja con cuidado, pero para empezar está bien)
     if datos_modelo not in datos_para_entrenamiento: # Evita duplicar la lista entera si ya está
          datos_para_entrenamiento.extend(datos_modelo)
 
@@ -355,14 +343,13 @@ def entrenar_modelo_desde_datos():
 
     # Preparar los datos para TensorFlow
     entradas = np.array([[dato[0], dato[1]] for dato in datos_para_entrenamiento], dtype=np.float32)
-    salidas = np.array([dato[2] for dato in datos_para_entrenamiento], dtype=np.float32).reshape(-1, 1) # Asegurar forma correcta
+    salidas = np.array([dato[2] for dato in datos_para_entrenamiento], dtype=np.float32).reshape(-1, 1) 
     
     # Definir el modelo
-    # Es importante que la input_shape coincida con tus datos (2 características: velocidad, distancia)
     nuevo_modelo = tf.keras.models.Sequential([
         tf.keras.layers.Dense(32, activation='relu', input_shape=(2,)), # Capa de entrada
         tf.keras.layers.Dense(16, activation='relu'),                  # Capa oculta
-        tf.keras.layers.Dense(1, activation='sigmoid')                # Capa de salida (probabilidad de saltar)
+        tf.keras.layers.Dense(1, activation='sigmoid')                # Capa de salida
     ])
     
     nuevo_modelo.compile(optimizer='adam',
@@ -370,8 +357,6 @@ def entrenar_modelo_desde_datos():
                          metrics=['accuracy'])
     
     print("Entrenando el modelo...")
-    # Ajusta epochs y batch_size según sea necesario
-    # Considera usar callbacks como EarlyStopping o ModelCheckpoint para entrenamientos más largos
     try:
         nuevo_modelo.fit(entradas, salidas, epochs=50, batch_size=32, validation_split=0.2, verbose=1)
         
@@ -402,7 +387,7 @@ def main():
                         en_suelo = False
                         salto_altura_actual = salto_altura_inicial # Reiniciar altura de salto al inicio del salto
                 
-                # Controles globales (funcionan incluso en pausa, excepto los de juego)
+                # Controles globales
                 if evento.key == pygame.K_p:
                     if not menu_activo : # No pausar si estamos en el menú
                         toggle_pausa()
