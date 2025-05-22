@@ -10,7 +10,7 @@ pygame.init()
 
 w, h = 800, 400
 pantalla = pygame.display.set_mode((w, h))
-pygame.display.set_caption("Juego con IA KNN")
+pygame.display.set_caption("K-Vecinos más Cercanos")
 
 BLANCO = (255, 255, 255)
 NEGRO = (0, 0, 0)

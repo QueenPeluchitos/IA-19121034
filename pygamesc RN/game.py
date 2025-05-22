@@ -10,7 +10,7 @@ pygame.init()
 
 w, h = 800, 400
 pantalla = pygame.display.set_mode((w, h))
-pygame.display.set_caption("Juego: Disparo de Bala, Salto, Nave y Menú")
+pygame.display.set_caption("Red Neuronal")
 
 BLANCO = (255, 255, 255)
 NEGRO = (0, 0, 0)
