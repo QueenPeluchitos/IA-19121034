@@ -22,6 +22,8 @@ bala_rect = pygame.Rect(w - 50, h - 90, 16, 16)
 nave_rect = pygame.Rect(w - 100, 290, 64, 64)
 nave_rect2 = pygame.Rect(w - 765, 0, 64, 64)
 bala_rect2 = pygame.Rect(nave_rect2.centerx - 8, nave_rect2.bottom, 16, 16)
+MAX_X_ADELANTE = 100 # Límite hacia la derecha
+  
 
 salto = False
 salto_altura_inicial = 15
@@ -31,7 +33,7 @@ en_suelo = True
 pausa = False
 menu_activo = True
 modo_auto = False
-velocidad_jugador = 15
+velocidad_jugador = 100
 
 bala_disparada = False
 bala_disparada2 = False
@@ -165,10 +167,19 @@ def decision_auto():
     if accion == 1:
         jugador_rect.x = max(0, jugador_rect.x - velocidad_jugador)
     elif accion == 2:
-        jugador_rect.x = min(w - jugador_rect.width, jugador_rect.x + velocidad_jugador)
+        jugador_rect.x = min(MAX_X_ADELANTE, jugador_rect.x + velocidad_jugador)
     elif accion == 3 and en_suelo:
         salto = True
         en_suelo = False
+    else:
+        # Si no se mueve lateralmente, vuelve hacia la posición inicial
+        if jugador_rect.x > posicion_inicial_x:
+            jugador_rect.x -= 2
+        elif jugador_rect.x < posicion_inicial_x:
+            jugador_rect.x += 2
+
+
+
 
 def guardar_datos_a_archivo():
     if datos_modelo:
@@ -274,7 +285,8 @@ def main():
                     if evento.key == pygame.K_LEFT:
                         jugador_rect.x = max(0, jugador_rect.x - velocidad_jugador)
                     if evento.key == pygame.K_RIGHT:
-                        jugador_rect.x = min(w - jugador_rect.width, jugador_rect.x + velocidad_jugador)
+                        jugador_rect.x = min(MAX_X_ADELANTE, jugador_rect.x + velocidad_jugador)
+
                 if evento.key == pygame.K_p:
                     pausa = not pausa
                 if evento.key == pygame.K_q:

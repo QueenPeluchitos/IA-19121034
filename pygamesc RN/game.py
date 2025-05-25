@@ -5,6 +5,7 @@ import numpy as np
 import pickle
 import os
 from collections import Counter
+from sklearn.model_selection import train_test_split
 
 pygame.init()
 
@@ -17,6 +18,8 @@ NEGRO = (0, 0, 0)
 
 jugador_rect = pygame.Rect(50, h - 100, 32, 48)
 posicion_inicial_x = jugador_rect.x
+GROUND_Y = jugador_rect.y
+
 bala_rect = pygame.Rect(w - 50, h - 90, 16, 16)
 nave_rect = pygame.Rect(w - 100, 290, 64, 64)
 nave_rect2 = pygame.Rect(w - 765, 0, 64, 64)
@@ -30,7 +33,8 @@ en_suelo = True
 pausa = False
 menu_activo = True
 modo_auto = False
-velocidad_jugador = 15
+
+velocidad_jugador = 100
 
 bala_disparada = False
 bala_disparada2 = False
@@ -45,6 +49,13 @@ fuente_media = pygame.font.SysFont('Arial', 24)
 
 datos_modelo = []
 
+# Movimiento lateral
+STEPS_TOTAL = 10
+movimiento_activo = False
+movimiento_direccion = 0
+movimiento_steps = 0
+
+# --- Carga de assets ---
 try:
     jugador_frames = [
         pygame.image.load('assets/sprites/mono_frame_1.png'),
@@ -68,6 +79,7 @@ if os.path.exists(MODELO_PATH):
     modelo = tf.keras.models.load_model(MODELO_PATH)
     print("Modelo cargado correctamente.")
 
+# --- Funciones del juego ---
 def disparar_bala():
     global bala_disparada, velocidad_bala_actual
     if not bala_disparada:
@@ -79,7 +91,7 @@ def disparar_bala2():
     if not bala_disparada2:
         bala_rect2.x = nave_rect2.centerx - 8
         bala_rect2.y = nave_rect2.bottom
-        velocidad_bala2_y = random.randint(4, 7)
+        velocidad_bala2_y = random.randint(3, 8)
         bala_disparada2 = True
 
 def reset_bala():
@@ -96,8 +108,8 @@ def manejar_salto():
     if salto:
         jugador_rect.y -= salto_altura_actual
         salto_altura_actual -= gravedad
-        if jugador_rect.y >= h - 100:
-            jugador_rect.y = h - 100
+        if jugador_rect.y >= GROUND_Y:
+            jugador_rect.y = GROUND_Y
             salto = False
             salto_altura_actual = salto_altura_inicial
             en_suelo = True
@@ -126,8 +138,8 @@ def update_game_state():
         reiniciar_juego_a_menu()
 
 def guardar_datos_para_modelo(teclas):
-    distancia_x = abs(jugador_rect.x - bala_rect.x)
-    distancia_y = abs(jugador_rect.y - bala_rect2.y)
+    distancia_x = jugador_rect.x - bala_rect.x
+    distancia_y = jugador_rect.y - bala_rect2.y
     accion = 0
     if salto:
         accion = 3
@@ -135,7 +147,6 @@ def guardar_datos_para_modelo(teclas):
         accion = 1
     elif teclas[pygame.K_RIGHT]:
         accion = 2
-
     datos_modelo.append((
         float(velocidad_bala_actual),
         float(distancia_x),
@@ -145,28 +156,31 @@ def guardar_datos_para_modelo(teclas):
     ))
 
 def decision_auto():
-    global salto, en_suelo
+    global salto, en_suelo, movimiento_activo, movimiento_direccion
     if not modelo:
         return
 
+    distancia_x = jugador_rect.x - bala_rect.x
+    distancia_y = jugador_rect.y - bala_rect2.y
+    velocidad_x = float(velocidad_bala_actual)
+    velocidad_y = float(velocidad_bala2_y)
+
     entrada = np.array([[ 
-        float(velocidad_bala_actual),
-        float(abs(jugador_rect.x - bala_rect.x)),
-        float(velocidad_bala2_y),
-        float(abs(jugador_rect.y - bala_rect2.y))
+        velocidad_x / 10.0,
+        distancia_x / w,
+        velocidad_y / 10.0,
+        distancia_y / h
     ]], dtype=np.float32)
 
-    prediccion = modelo.predict(entrada, verbose=0)[0]
-    accion = np.argmax(prediccion)
-    print(f"Predicción: {prediccion} → Acción: {accion}")
+    pred = modelo.predict(entrada, verbose=0)[0]
+    accion = np.argmax(pred)
 
-    if accion == 1:
-        jugador_rect.x = max(0, jugador_rect.x - velocidad_jugador)
-    elif accion == 2:
-        jugador_rect.x = min(w - jugador_rect.width, jugador_rect.x + velocidad_jugador)
+    if accion == 1 and not movimiento_activo:
+        iniciar_movimiento(-1)
+    elif accion == 2 and not movimiento_activo:
+        iniciar_movimiento(1)
     elif accion == 3 and en_suelo:
         salto = True
-        en_suelo = False
 
 def guardar_datos_a_archivo():
     if datos_modelo:
@@ -177,51 +191,47 @@ def guardar_datos_a_archivo():
 
 def entrenar_modelo_desde_datos():
     global modelo
-
     if os.path.exists(MODELO_PATH):
-        print("Eliminando modelo antiguo...")
         os.remove(MODELO_PATH)
-
-    datos_para_entrenamiento = []
+    datos_para_ent = []
     try:
         with open('datos_entrenamiento.pkl', 'rb') as f:
-            datos_para_entrenamiento = pickle.load(f)
+            datos_para_ent = pickle.load(f)
     except FileNotFoundError:
         print("Archivo de datos no encontrado.")
-
-    datos_para_entrenamiento = [d for d in datos_para_entrenamiento if len(d) == 5]
-    datos_para_entrenamiento.extend(datos_modelo)
-
-    if not datos_para_entrenamiento:
-        print("No hay datos suficientes.")
+    datos_para_ent.extend(datos_modelo)
+    if len(datos_para_ent) < 10:
+        print("[INFO] Insuficientes datos para entrenar el modelo.")
         return
-
-    entradas = np.array([[d[0], d[1], d[2], d[3]] for d in datos_para_entrenamiento], dtype=np.float32)
-    salidas = np.array([d[4] for d in datos_para_entrenamiento], dtype=np.int32)
-
+    entradas = np.array([[d[0], d[1], d[2], d[3]] for d in datos_para_ent], dtype=np.float32)
+    salidas = np.array([d[4] for d in datos_para_ent], dtype=np.int32)
+    X_train, X_test, y_train, y_test = train_test_split(entradas, salidas, test_size=0.2, random_state=42)
     modelo = tf.keras.models.Sequential([
         tf.keras.layers.Dense(32, activation='relu', input_shape=(4,)),
         tf.keras.layers.Dense(16, activation='relu'),
         tf.keras.layers.Dense(4, activation='softmax')
     ])
-
     modelo.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    modelo.fit(entradas, salidas, epochs=50, batch_size=32, validation_split=0.2)
+    modelo.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.2, verbose=1)
+    loss, accuracy = modelo.evaluate(X_test, y_test, verbose=0)
+    print(f"[INFO] Precisión: {accuracy:.4f}, Pérdida: {loss:.4f}, Muestras test: {len(y_test)}")
     modelo.save(MODELO_PATH)
-    print("Modelo entrenado y guardado.")
 
 def reiniciar_juego_a_menu():
-    global menu_activo, salto, en_suelo, bala_disparada, bala_disparada2, salto_altura_actual
+    global menu_activo, salto, en_suelo, bala_disparada, bala_disparada2
+    global salto_altura_actual, movimiento_activo, movimiento_steps
     menu_activo = True
-    jugador_rect.x, jugador_rect.y = 50, h - 100
+    jugador_rect.x, jugador_rect.y = posicion_inicial_x, h - 100
     bala_rect.x = w - 50
-    bala_rect2.x = jugador_rect.centerx - 8
+    bala_rect2.x = nave_rect2.centerx - 8
     bala_rect2.y = nave_rect2.bottom
     bala_disparada = False
     bala_disparada2 = False
     salto = False
     en_suelo = True
     salto_altura_actual = salto_altura_inicial
+    movimiento_activo = False
+    movimiento_steps = 0
 
 def mostrar_menu():
     global menu_activo, modo_auto
@@ -252,6 +262,32 @@ def mostrar_menu():
                     pygame.quit()
                     exit()
 
+def iniciar_salto():
+    global salto, en_suelo
+    salto = True
+    en_suelo = False
+
+def iniciar_movimiento(direccion):
+    global movimiento_activo, movimiento_direccion, movimiento_steps
+    if not movimiento_activo:
+        movimiento_activo = True
+        movimiento_direccion = direccion
+        movimiento_steps = STEPS_TOTAL
+
+def manejar_movimiento_lateral():
+    global movimiento_activo, movimiento_steps
+    if not movimiento_activo:
+        return
+    paso = velocidad_jugador / STEPS_TOTAL
+    nuevo_x = jugador_rect.x + movimiento_direccion * paso
+    if nuevo_x > 100:
+        nuevo_x = 100
+        movimiento_activo = False
+    jugador_rect.x = max(0, min(100, nuevo_x))
+    movimiento_steps -= 1
+    if movimiento_steps <= 0:
+        movimiento_activo = False
+
 def main():
     global salto, en_suelo, pausa
     reloj = pygame.time.Clock()
@@ -263,15 +299,13 @@ def main():
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
                 correr = False
-            if evento.type == pygame.KEYDOWN:
-                if not menu_activo and not pausa:
-                    if evento.key == pygame.K_SPACE and en_suelo:
-                        salto = True
-                        en_suelo = False
-                    if evento.key == pygame.K_LEFT:
-                        jugador_rect.x = max(0, jugador_rect.x - velocidad_jugador)
-                    if evento.key == pygame.K_RIGHT:
-                        jugador_rect.x = min(w - jugador_rect.width, jugador_rect.x + velocidad_jugador)
+            if evento.type == pygame.KEYDOWN and not menu_activo and not pausa:
+                if evento.key == pygame.K_SPACE and en_suelo:
+                    iniciar_salto()
+                if evento.key == pygame.K_LEFT:
+                    iniciar_movimiento(-1)
+                if evento.key == pygame.K_RIGHT:
+                    iniciar_movimiento(+1)
                 if evento.key == pygame.K_p:
                     pausa = not pausa
                 if evento.key == pygame.K_q:
@@ -279,20 +313,17 @@ def main():
 
         teclas = pygame.key.get_pressed()
 
-        if not modo_auto:
-            if not teclas[pygame.K_LEFT] and not teclas[pygame.K_RIGHT]:
-                if jugador_rect.x > posicion_inicial_x:
-                    jugador_rect.x -= 2
-                elif jugador_rect.x < posicion_inicial_x:
-                    jugador_rect.x += 2
+        if not modo_auto and not menu_activo and not pausa:
+            guardar_datos_para_modelo(teclas)
+        if modo_auto and not menu_activo and not pausa:
+            decision_auto()
+
+        if salto or (not en_suelo and jugador_rect.y < h - 100):
+            manejar_salto()
+
+        manejar_movimiento_lateral()
 
         if not menu_activo and not pausa:
-            if modo_auto:
-                decision_auto()
-            if salto or (not en_suelo and jugador_rect.y < h - 100):
-                manejar_salto()
-            if not modo_auto:
-                guardar_datos_para_modelo(teclas)
             if not bala_disparada:
                 disparar_bala()
             if not bala_disparada2:

@@ -18,6 +18,7 @@ NEGRO = (0, 0, 0)
 # Variables del jugador y enemigos
 jugador_rect = pygame.Rect(50, h - 100, 32, 48)
 posicion_inicial_x = jugador_rect.x
+limite_derecha = posicion_inicial_x + 100  # no puede pasar más allá de +100 px
 bala_rect = pygame.Rect(w - 50, h - 90, 16, 16)
 nave_rect = pygame.Rect(w - 100, 290, 64, 64)
 nave_rect2 = pygame.Rect(w - 765, 0, 64, 64)
@@ -32,14 +33,12 @@ pausa = False
 menu_activo = True
 modo_auto = False
 velocidad_jugador = 15
+paso_derecha = 100  # avance fijo al mover a la derecha
 
 bala_disparada = False
 bala_disparada2 = False
 velocidad_bala_actual = -10
 velocidad_bala2_y = 5
-
-fondo_x1 = 0
-fondo_x2 = w
 
 fuente_grande = pygame.font.SysFont('Arial', 28)
 fuente_media = pygame.font.SysFont('Arial', 24)
@@ -60,11 +59,9 @@ fondo_img = pygame.transform.scale(fondo_img, (w, h))
 
 MODELO_PATH = 'modelo_arbol.pkl'
 modelo_arbol = None
-
 if os.path.exists(MODELO_PATH):
     with open(MODELO_PATH, 'rb') as f:
         modelo_arbol = pickle.load(f)
-        print("Modelo de árbol cargado correctamente.")
 
 def disparar_bala():
     global bala_disparada, velocidad_bala_actual
@@ -73,7 +70,7 @@ def disparar_bala():
         bala_disparada = True
 
 def disparar_bala2():
-    global bala_disparada2, bala_rect2, velocidad_bala2_y
+    global bala_disparada2, velocidad_bala2_y
     if not bala_disparada2:
         bala_rect2.x = nave_rect2.centerx - 8
         bala_rect2.y = nave_rect2.bottom
@@ -81,7 +78,7 @@ def disparar_bala2():
         bala_disparada2 = True
 
 def reset_bala():
-    global bala_rect, bala_disparada
+    global bala_disparada
     bala_rect.x = w - 50
     bala_disparada = False
 
@@ -101,112 +98,61 @@ def manejar_salto():
             en_suelo = True
 
 def update_game_state():
-    pantalla.blit(fondo_img, (fondo_x1, 0))
-    pantalla.blit(fondo_img, (fondo_x2, 0))
+    pantalla.blit(fondo_img, (0, 0))
     pantalla.blit(jugador_frames[0], jugador_rect)
     pantalla.blit(nave_img, nave_rect)
     pantalla.blit(nave_img, nave_rect2)
-
     if bala_disparada:
         bala_rect.x += velocidad_bala_actual
         if bala_rect.x < 0:
             reset_bala()
     pantalla.blit(bala_img, bala_rect)
-
     if bala_disparada2:
         bala_rect2.y += velocidad_bala2_y
         if bala_rect2.y > h:
             reset_bala2()
     pantalla.blit(bala_img, bala_rect2)
-
     if jugador_rect.colliderect(bala_rect) or jugador_rect.colliderect(bala_rect2):
-        print("¡Colisión detectada!")
         reiniciar_juego_a_menu()
 
 def guardar_datos_para_modelo(teclas):
     distancia_x = abs(jugador_rect.x - bala_rect.x)
     distancia_y = abs(jugador_rect.y - bala_rect2.y)
-
-    accion = 0  # quieto
+    accion = 0
     if salto:
         accion = 3
     elif teclas[pygame.K_LEFT]:
         accion = 1
     elif teclas[pygame.K_RIGHT]:
         accion = 2
-
-    datos_modelo.append((
-        float(velocidad_bala_actual),
-        float(distancia_x),
-        float(velocidad_bala2_y),
-        float(distancia_y),
-        accion
-    ))
+    datos_modelo.append((float(velocidad_bala_actual), float(distancia_x), float(velocidad_bala2_y), float(distancia_y), accion))
 
 def decision_auto():
     global salto, en_suelo
     if not modelo_arbol:
         return
-
     entrada = np.array([[
         float(velocidad_bala_actual),
         float(abs(jugador_rect.x - bala_rect.x)),
         float(velocidad_bala2_y),
         float(abs(jugador_rect.y - bala_rect2.y))
     ]])
-
     accion = modelo_arbol.predict(entrada)[0]
-    print(f"Acción predicha: {accion}")
-
     if accion == 1:
         jugador_rect.x = max(0, jugador_rect.x - velocidad_jugador)
     elif accion == 2:
-        jugador_rect.x = min(w - jugador_rect.width, jugador_rect.x + velocidad_jugador)
+        # mueve +paso_derecha pero no pasa del límite
+        jugador_rect.x = min(limite_derecha, jugador_rect.x + paso_derecha)
     elif accion == 3 and en_suelo:
         salto = True
         en_suelo = False
 
-def guardar_datos_a_archivo():
-    if datos_modelo:
-        with open('datos_entrenamiento.pkl', 'wb') as f:
-            pickle.dump(datos_modelo, f)
-        acciones = [d[4] for d in datos_modelo]
-        print("Acciones guardadas:", dict(Counter(acciones)))
-
-def entrenar_modelo_desde_datos():
-    global modelo_arbol
-
-    datos_para_entrenamiento = []
-    try:
-        with open('datos_entrenamiento.pkl', 'rb') as f:
-            datos_para_entrenamiento = pickle.load(f)
-    except FileNotFoundError:
-        print("Archivo de datos no encontrado.")
-
-    datos_para_entrenamiento = [d for d in datos_para_entrenamiento if len(d) == 5]
-    datos_para_entrenamiento.extend(datos_modelo)
-
-    if not datos_para_entrenamiento:
-        print("No hay datos suficientes.")
-        return
-
-    X = np.array([[d[0], d[1], d[2], d[3]] for d in datos_para_entrenamiento])
-    y = np.array([d[4] for d in datos_para_entrenamiento])
-
-    modelo_arbol = DecisionTreeClassifier()
-    modelo_arbol.fit(X, y)
-
-    with open(MODELO_PATH, 'wb') as f:
-        pickle.dump(modelo_arbol, f)
-    print("Modelo de árbol entrenado y guardado.")
-
 def reiniciar_juego_a_menu():
     global menu_activo, salto, en_suelo, bala_disparada, bala_disparada2, salto_altura_actual
     menu_activo = True
-    jugador_rect.x, jugador_rect.y = 50, h - 100
+    jugador_rect.x, jugador_rect.y = posicion_inicial_x, h - 100
     bala_rect.x = w - 50
-    bala_rect2.x = jugador_rect.centerx - 8
-    bala_rect2.y = nave_rect2.bottom
+    bala_rect2.x, bala_rect2.y = nave_rect2.centerx - 8, nave_rect2.bottom
     bala_disparada = False
     bala_disparada2 = False
     salto = False
@@ -223,24 +169,38 @@ def mostrar_menu():
         pantalla.blit(fuente_media.render("Presiona 'T' para Entrenar Modelo", True, BLANCO), (w//2 - 180, h//2 + 30))
         pantalla.blit(fuente_media.render("Presiona 'Q' para Salir", True, BLANCO), (w//2 - 120, h//2 + 60))
         pygame.display.flip()
-        for evento in pygame.event.get():
-            if evento.type == pygame.QUIT:
-                guardar_datos_a_archivo()
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
                 pygame.quit()
                 exit()
-            if evento.type == pygame.KEYDOWN:
-                if evento.key == pygame.K_a and modelo_arbol:
+            if e.type == pygame.KEYDOWN:
+                if e.key == pygame.K_a and modelo_arbol:
                     modo_auto = True
                     menu_activo = False
-                elif evento.key == pygame.K_m:
+                elif e.key == pygame.K_m:
                     modo_auto = False
                     menu_activo = False
-                elif evento.key == pygame.K_t:
+                elif e.key == pygame.K_t:
                     entrenar_modelo_desde_datos()
-                elif evento.key == pygame.K_q:
-                    guardar_datos_a_archivo()
+                elif e.key == pygame.K_q:
                     pygame.quit()
                     exit()
+
+def entrenar_modelo_desde_datos():
+    global modelo_arbol
+    try:
+        with open('datos_entrenamiento.pkl', 'rb') as f:
+            datos = pickle.load(f)
+    except FileNotFoundError:
+        datos = []
+    datos.extend(datos_modelo)
+    if not datos:
+        return
+    X = np.array([[d[0], d[1], d[2], d[3]] for d in datos])
+    y = np.array([d[4] for d in datos])
+    modelo_arbol = DecisionTreeClassifier().fit(X, y)
+    with open(MODELO_PATH, 'wb') as f:
+        pickle.dump(modelo_arbol, f)
 
 def main():
     global salto, en_suelo, pausa
@@ -249,7 +209,6 @@ def main():
     while correr:
         if menu_activo:
             mostrar_menu()
-
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
                 correr = False
@@ -262,20 +221,19 @@ def main():
                     if evento.key == pygame.K_LEFT:
                         jugador_rect.x = max(0, jugador_rect.x - velocidad_jugador)
                     if evento.key == pygame.K_RIGHT:
-                        jugador_rect.x = min(w - jugador_rect.width, jugador_rect.x + velocidad_jugador)
+                        jugador_rect.x = min(limite_derecha, jugador_rect.x + paso_derecha)
                 if evento.key == pygame.K_p:
                     pausa = not pausa
                 if evento.key == pygame.K_q:
                     correr = False
 
         teclas = pygame.key.get_pressed()
-
-        if not modo_auto:
-            if not teclas[pygame.K_LEFT] and not teclas[pygame.K_RIGHT]:
-                if jugador_rect.x > posicion_inicial_x:
-                    jugador_rect.x -= 2
-                elif jugador_rect.x < posicion_inicial_x:
-                    jugador_rect.x += 2
+        if not modo_auto and not (teclas[pygame.K_LEFT] or teclas[pygame.K_RIGHT]):
+            # vuelve al centro inicial si no hay input
+            if jugador_rect.x > posicion_inicial_x:
+                jugador_rect.x -= 2
+            elif jugador_rect.x < posicion_inicial_x:
+                jugador_rect.x += 2
 
         if not menu_activo and not pausa:
             if modo_auto:
@@ -293,7 +251,6 @@ def main():
         pygame.display.flip()
         reloj.tick(30)
 
-    guardar_datos_a_archivo()
     pygame.quit()
 
 if __name__ == "__main__":
