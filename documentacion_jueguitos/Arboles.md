@@ -1,15 +1,3 @@
-import pygame
-import random
-import pandas as pd
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import numpy as np
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.tree import DecisionTreeClassifier, export_graphviz
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
-
 # Esta función entrena un árbol de decisión para decidir cuándo saltar
 def entrenar_arbol_salto(datos_modelo):
     # Si no tenemos suficientes datos, no vale la pena entrenar
@@ -58,7 +46,6 @@ def decidir_salto_arbol(jugador, bala, velocidad_bala, bala_aire, bala_disparada
     if prediccion == 1 and en_suelo:
         salto = True
         en_suelo = False
-        print("Saltar")
     
     return salto, en_suelo
 
@@ -108,11 +95,9 @@ def decidir_movimiento_arbol(jugador, bala_aire, arbol_movimiento, salto, bala_s
     # Ejecutamos la acción pero con límites para no salirse de la pantalla
     if accion == 0 and jugador.x > 0:  # Moverse a la izquierda
         jugador.x -= 5
-        print("Izquierda")
     elif accion == 2 and jugador.x < 200 - jugador.width:  # Moverse a la derecha
         jugador.x += 5
-        print("Derecha (árbol)")
     else:  # Quedarse quieto (o si está en el borde)
-        print("Quieto (árbol)")
+        return
     
     return jugador.x, accion

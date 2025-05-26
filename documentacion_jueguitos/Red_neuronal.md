@@ -1,209 +1,133 @@
--Importaciones-
-import pygame, random, tensorflow as tf, numpy as np, pickle, os
-from collections import Counter
+# Esta función entrena una red neuronal para decidir cuándo saltar
+def entrenar_modelo(datos_modelo):
+    # Necesitamos suficientes datos para que la red neuronal aprenda bien
+    if len(datos_modelo) < 10:
+        print("Insuficientes datos para entrenar el modelo.")
+        return None
 
-pygame: motor del juego.
-random: velocidades aleatorias de proyectiles.
-tensorflow: modelo de IA.
-numpy: para vectores/matrices del modelo.
-pickle: guardar y cargar datos de entrenamiento.
-os: gestión de archivos.
-Counter: estadísticas de acciones tomadas.
+    # Preparamos los datos como siempre
+    datos = np.array(datos_modelo)
+    X = datos[:, :6]  # Las primeras 6 características (velocidad, distancias, etc.)
+    y = datos[:, 6]   # La decisión de saltar (0 o 1)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
--Configuración inicial-
-pygame.init()
-w, h = 800, 400
-pantalla = pygame.display.set_mode((w, h))
+    # Creamos la red neuronal 
+    modelo = Sequential([
+        Dense(32, input_dim=6, activation='relu'),  # Primera capa: 32 neuronas, recibe 6 entradas
+        Dense(32, activation='relu'),               # Segunda capa: 32 neuronas más
+        Dense(16, activation='relu'),               # Tercera capa: 16 neuronas (se va reduciendo)
+        Dense(1, activation='sigmoid')              # Última capa: 1 neurona que dice sí/no (0-1)
+    ])
+    
+    # Le decimos cómo aprender: adam es un optimizador inteligente, binary_crossentropy para sí/no
+    modelo.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    
+    # Aquí es donde realmente aprende - 100 veces repasa todos los datos
+    modelo.fit(X_train, y_train, epochs=100, batch_size=32, verbose=1)
+    
+    # Probamos qué tan bien aprendió con datos que nunca vio
+    loss, accuracy = modelo.evaluate(X_test, y_test, verbose=0)
+    print(f"Modelo entrenado con precisión: {accuracy:.2f}")
+    
+    return modelo
 
-Define la pantalla
+# Esta función usa la red neuronal entrenada para decidir si saltar
+def decidir_salto(jugador, bala, velocidad_bala, bala_aire, bala_disparada_aire, modelo_entrenado, salto, en_suelo):
+    # Sin modelo entrenado, no podemos hacer nada
+    if modelo_entrenado is None:
+        print("Modelo no entrenado. No se puede decidir.")
+        return False, en_suelo
 
--Variables-
-jugador_rect = pygame.Rect(50, h - 100, 32, 48)
-bala_rect = pygame.Rect(w - 50, h - 90, 16, 16)
-nave_rect = pygame.Rect(w - 100, 290, 64, 64)
-nave_rect2 = pygame.Rect(w - 765, 0, 64, 64)
-bala_rect2 = pygame.Rect(nave_rect2.centerx - 8, nave_rect2.bottom, 16, 16)
+    # Calculamos todas las características del momento actual
+    distancia_suelo = abs(jugador.x - bala.x)                    # Distancia a bala del suelo
+    distancia_aire_x = abs(jugador.centerx - bala_aire.centerx)  # Distancia horizontal a bala aérea
+    distancia_aire_y = abs(jugador.centery - bala_aire.centery)  # Distancia vertical a bala aérea
+    hay_bala_aire = 1 if bala_disparada_aire else 0              # Si hay bala aérea o no
 
-Jugador, balas, naves
+    # Armamos el vector de entrada para la red neuronal
+    entrada = np.array([[velocidad_bala, distancia_suelo, distancia_aire_x, distancia_aire_y, hay_bala_aire, jugador.x]])
 
--Variables de salto y físicas-
-salto = False
-salto_altura_inicial = 15
-salto_altura_actual = salto_altura_inicial
-gravedad = 1
-en_suelo = True
-bala_disparada = False
-bala_disparada2 = False
+    # La red neuronal nos da un número entre 0 y 1 (probabilidad de saltar)
+    prediccion = modelo_entrenado.predict(entrada, verbose=0)[0][0]
 
-Salto y balas
-
--Modelo-
-MODELO_PATH = 'modelo_salto.keras'
-modelo = None
-
-Se usa Keras para cargar el archivo de entrenamiento
-
--Funciones-
-disparar_bala() 
-disparar_bala2()
-
-Activan la bala horizontal y vertical con velocidades aleatorias.
-
-reset_bala()
-reset_bala2()
-
-Reposicionan las balas al punto de origen cuando salen de la pantalla.
-
-def manejar_salto():
-    global salto, salto_altura_actual, en_suelo
-    if salto:
-        jugador_rect.y -= salto_altura_actual
-        salto_altura_actual -= gravedad
-        if jugador_rect.y >= h - 100:
-            jugador_rect.y = h - 100
-            salto = False
-            salto_altura_actual = salto_altura_inicial
-            en_suelo = True
-
-Controla el salto del jugador usando una parábola (velocidad disminuye por gravedad hasta tocar el suelo).
-
-def update_game_state():
-    pantalla.blit(fondo_img, (fondo_x1, 0))
-    pantalla.blit(fondo_img, (fondo_x2, 0))
-    pantalla.blit(jugador_frames[0], jugador_rect)
-    pantalla.blit(nave_img, nave_rect)
-    pantalla.blit(nave_img, nave_rect2)
-
-    if bala_disparada:
-        bala_rect.x += velocidad_bala_actual
-        if bala_rect.x < 0:
-            reset_bala()
-    pantalla.blit(bala_img, bala_rect)
-
-    if bala_disparada2:
-        bala_rect2.y += velocidad_bala2_y
-        if bala_rect2.y > h:
-            reset_bala2()
-    pantalla.blit(bala_img, bala_rect2)
-
-    if jugador_rect.colliderect(bala_rect) or jugador_rect.colliderect(bala_rect2):
-        print("¡Colisión detectada!")
-        reiniciar_juego_a_menu()
-
-Dibuja fondo, jugador, naves y balas.
-Mueve las balas.
-Detecta colisiones.
-Si hay colisión, reinicia el juego y regresa al menú.
-
--Recolección de datos-
-guardar_datos_para_modelo(teclas)
-datos_modelo.append((vel_bala, dist_x, vel_bala2_y, dist_y, accion))
-
-Guarda:
-Velocidad de las balas.
-Distancias entre el jugador y las balas.
-Acción tomada (0 = nada, 1 = izquierda, 2 = derecha, 3 = salto).
-
--Modo automático-
-def decision_auto():
-    global salto, en_suelo
-    if not modelo:
-        return
-
-    entrada = np.array([[ 
-        float(velocidad_bala_actual),
-        float(abs(jugador_rect.x - bala_rect.x)),
-        float(velocidad_bala2_y),
-        float(abs(jugador_rect.y - bala_rect2.y))
-    ]], dtype=np.float32)
-
-    prediccion = modelo.predict(entrada, verbose=0)[0]
-    accion = np.argmax(prediccion)
-    print(f"Predicción: {prediccion} → Acción: {accion}")
-
-    if accion == 1:
-        jugador_rect.x = max(0, jugador_rect.x - velocidad_jugador)
-    elif accion == 2:
-        jugador_rect.x = min(w - jugador_rect.width, jugador_rect.x + velocidad_jugador)
-    elif accion == 3 and en_suelo:
+    # Si la probabilidad es mayor a 0.5 (50%) Y estamos en el suelo, saltamos
+    if prediccion > 0.5 and en_suelo:
         salto = True
         en_suelo = False
+    return salto, en_suelo
 
-Toma los datos actuales del juego.
-Usa el modelo IA para predecir qué hacer.
-Aplica esa acción: mover izquierda, derecha o saltar.
+# Esta función entrena una red neuronal para decidir el movimiento (izq/quieto/der)
+def entrenar_red_movimiento(datos_movimiento):
+    # Otra vez, necesitamos datos suficientes
+    if len(datos_movimiento) < 10:
+        print("No hay suficientes datos para entrenar.")
+        return None
 
--Entrenar modelo-
-def entrenar_modelo_desde_datos():
-    global modelo
+    # Preparamos los datos de movimiento
+    datos = np.array(datos_movimiento)
+    X = datos[:, :8].astype('float32')  # 8 características
+    y = datos[:, 8].astype('int')       # Acción tomada (0, 1, o 2)
 
-    if os.path.exists(MODELO_PATH):
-        print("Eliminando modelo antiguo...")
-        os.remove(MODELO_PATH)
+    # Convertimos las acciones a formato "categórico" - la red neuronal lo entiende mejor así
+    # En lugar de [0,1,2] usamos [[1,0,0], [0,1,0], [0,0,1]]
+    y_categorical = to_categorical(y, num_classes=3)
 
-    datos_para_entrenamiento = []
-    try:
-        with open('datos_entrenamiento.pkl', 'rb') as f:
-            datos_para_entrenamiento = pickle.load(f)
-    except FileNotFoundError:
-        print("Archivo de datos no encontrado.")
+    # Dividimos los datos
+    X_train, X_test, y_train, y_test = train_test_split(X, y_categorical, test_size=0.2, random_state=42)
 
-    datos_para_entrenamiento = [d for d in datos_para_entrenamiento if len(d) == 5]
-    datos_para_entrenamiento.extend(datos_modelo)
-
-    if not datos_para_entrenamiento:
-        print("No hay datos suficientes.")
-        return
-
-    entradas = np.array([[d[0], d[1], d[2], d[3]] for d in datos_para_entrenamiento], dtype=np.float32)
-    salidas = np.array([d[4] for d in datos_para_entrenamiento], dtype=np.int32)
-
-    modelo = tf.keras.models.Sequential([
-        tf.keras.layers.Dense(32, activation='relu', input_shape=(4,)),
-        tf.keras.layers.Dense(16, activation='relu'),
-        tf.keras.layers.Dense(4, activation='softmax')
+    # Creamos la red neuronal para movimiento
+    model = Sequential([
+        Dense(64, input_dim=8, activation='relu'),  # Primera capa: 64 neuronas, recibe 8 entradas
+        Dense(32, activation='relu'),               # Segunda capa: 32 neuronas
+        Dense(3, activation='softmax')              # Última capa: 3 neuronas (izquierda/quieto/derecha)
     ])
 
-    modelo.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    modelo.fit(entradas, salidas, epochs=50, batch_size=32, validation_split=0.2)
-    modelo.save(MODELO_PATH)
-    print("Modelo entrenado y guardado.")
-
-Carga los datos del archivo y combina con los nuevos.
-Prepara entradas (X) y salidas (y).
-Entrena un modelo de red neuronal simple con 2 capas ocultas.
-Guarda el modelo en disco.
-
--Bucle main-
-if evento.key == pygame.K_LEFT:
-    jugador_rect.x = max(0, jugador_rect.x - velocidad_jugador)
-if evento.key == pygame.K_RIGHT:
-    jugador_rect.x = min(w - jugador_rect.width, jugador_rect.x + velocidad_jugador)
-
-Salto con la barra espaciadora
-
-if evento.key == pygame.K_LEFT:
-    jugador_rect.x = max(0, jugador_rect.x - velocidad_jugador)
-if evento.key == pygame.K_RIGHT:
-    jugador_rect.x = min(w - jugador_rect.width, jugador_rect.x + velocidad_jugador)
-
-Movimiento manual del jugador
-
-if not modo_auto:
-    if not teclas[pygame.K_LEFT] and not teclas[pygame.K_RIGHT]:
-        if jugador_rect.x > posicion_inicial_x:
-            ugador_rect.x -= 2
-        elif jugador_rect.x < posicion_inicial_x:
-            jugador_rect.x += 2
-
-Movimiento automático hacia la posición inicial
-
-if not bala_disparada:
-    disparar_bala()
-if not bala_disparada2:
-    disparar_bala2()
+    # Configuramos el aprendizaje - categorical_crossentropy para múltiples opciones
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     
-Disparo de balas
+    # Entrenamos la red neuronal
+    model.fit(X_train, y_train, epochs=100, batch_size=32, verbose=1)
 
+    # Vemos qué tan bien aprendió
+    loss, accuracy = model.evaluate(X_test, y_test, verbose=0)
+    print(f"Precisión del modelo de movimiento: {accuracy:.2f}")
+    
+    return model
 
+# Esta función usa la red neuronal para decidir el movimiento
+def decidir_movimiento(jugador, bala, modelo_movimiento, salto, bala_suelo):
+    # Sin modelo, no hay decisión
+    if modelo_movimiento is None:
+        print("Modelo no entrenado.")
+        return jugador.x, 1  # Devolvemos posición actual y acción "quieto"
 
+    # Calculamos la distancia a la bala del suelo
+    distancia_bala_suelo = abs(jugador.x - bala_suelo.x)
+
+    # Preparamos todas las características para la red
+    entrada = np.array([[
+        jugador.x,                    # Posición X del jugador
+        jugador.y,                    # Posición Y del jugador
+        bala.centerx,                 # Posición X de la bala aérea
+        bala.centery,                 # Posición Y de la bala aérea
+        bala_suelo.x,                 # Posición X de la bala del suelo
+        bala_suelo.y,                 # Posición Y de la bala del suelo
+        distancia_bala_suelo,         # Distancia calculada
+        1 if salto else 0             # Si está saltando o no
+    ]], dtype='float32')
+
+    # La red nos da 3 probabilidades [prob_izq, prob_quieto, prob_der]
+    prediccion = modelo_movimiento.predict(entrada, verbose=0)[0]
+    
+    # Elegimos la acción con mayor probabilidad
+    accion = np.argmax(prediccion)  # argmax encuentra el índice del valor más alto
+
+    # Ejecutamos la acción elegida, cuidando los límites
+    if accion == 0 and jugador.x > 0:  # Moverse a la izquierda
+        jugador.x -= 5
+    elif accion == 2 and jugador.x < 200 - jugador.width:  # Moverse a la derecha
+        jugador.x += 5
+    else:  # Quedarse quieto (o si está en el borde)
+        return
+
+    return jugador.x, accion

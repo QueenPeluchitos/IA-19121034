@@ -1,188 +1,111 @@
-import pygame, random, tensorflow as tf, numpy as np, pickle, os
-from collections import Counter
+# Esta función entrena un modelo KNN para decidir cuándo saltar
+# KNN funciona diferente a los árboles: busca los 10 casos más parecidos y decide basándose en ellos
+def entrenar_knn_salto(datos_modelo):
+    # Necesitamos al menos 10 datos para que tenga sentido
+    if len(datos_modelo) < 10:
+        print("Insuficientes datos para entrenar el modelo KNN de salto.")
+        return None
 
-pygame: motor para crear el juego.
-random: genera velocidades aleatorias para las balas.
-tensorflow: para el modelo de IA (red neuronal).
-numpy: manejo de vectores y matrices para el modelo.
-pickle: guardar y cargar datos de entrenamiento.
-os: gestión de archivos.
-Counter: estadísticas de las acciones tomadas durante el juego.
+    # Convertimos a numpy para que sklearn pueda trabajar con los datos
+    datos = np.array(datos_modelo)
+    X = datos[:, :6]  # Las primeras 6 columnas son las características
+    y = datos[:, 6]   # La columna 7 es la decisión (saltar=1, no saltar=0)
 
--Configuración inicial-
-pygame.init()
-w, h = 800, 400
-pantalla = pygame.display.set_mode((w, h))
+    # Dividimos en datos de entrenamiento y prueba
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-Define la pantalla
+    # Creamos el modelo KNN con 10 vecinos (busca los 10 casos más similares)
+    modelo_knn = KNeighborsClassifier(n_neighbors=10)
+    modelo_knn.fit(X_train, y_train)  # Aquí "aprende" guardando todos los casos
 
--Variables-
-jugador_rect = pygame.Rect(50, h - 100, 32, 48)
-posicion_inicial_x = jugador_rect.x
-bala_rect = pygame.Rect(w - 50, h - 90, 16, 16)
-nave_rect = pygame.Rect(w - 100, 290, 64, 64)
-nave_rect2 = pygame.Rect(w - 765, 0, 64, 64)
-bala_rect2 = pygame.Rect(nave_rect2.centerx - 8, nave_rect2.bottom, 16, 16)
+    # Probamos qué tan bien funciona
+    accuracy = modelo_knn.score(X_test, y_test)
+    print(f"Precisión del modelo KNN de salto: {accuracy:.2f}")
+    
+    return modelo_knn
 
-Define jugador, balas y naves.
+# Esta función usa el modelo KNN entrenado para decidir si saltar
+def decidir_salto_knn(jugador, bala, velocidad_bala, bala_aire, bala_disparada_aire, modelo_knn, salto, en_suelo):
+    # Sin modelo entrenado, no podemos hacer nada
+    if modelo_knn is None:
+        print("Modelo KNN no entrenado. No se puede decidir.")
+        return False, en_suelo
 
--Variables de salto y físicas-
-salto = False
-salto_altura_inicial = 15
-salto_altura_actual = salto_altura_inicial
-gravedad = 1
-en_suelo = True
+    # Calculamos todas las distancias y características del momento actual
+    distancia_suelo = abs(jugador.x - bala.x)  # Qué tan cerca está la bala del suelo
+    distancia_aire_x = abs(jugador.centerx - bala_aire.centerx)  # Distancia horizontal a bala aérea
+    distancia_aire_y = abs(jugador.centery - bala_aire.centery)  # Distancia vertical a bala aérea
+    hay_bala_aire = 1 if bala_disparada_aire else 0  # 1 si hay bala aérea, 0 si no
 
-bala_disparada = False
-bala_disparada2 = False
+    # Armamos el vector con todas las características
+    entrada = np.array([[velocidad_bala, distancia_suelo, distancia_aire_x, distancia_aire_y, hay_bala_aire, jugador.x]])
 
-Controlan el salto con parábola.
-Controlan si las balas están disparadas o no.
+    # El KNN busca los 10 casos más parecidos y decide basándose en qué hicieron la mayoría
+    prediccion = modelo_knn.predict(entrada)[0]
 
--Modelo de IA-
-MODELO_PATH = 'modelo_salto.keras'
-modelo = None
-
-Se usa Keras para cargar el archivo de entrenamiento
-
--Funciones principales-
-disparar_bala()
-disparar_bala2()
-Activan la bala horizontal y vertical con velocidades aleatorias.
-
-reset_bala()
-reset_bala2()
-Reposicionan las balas al punto de origen cuando salen de la pantalla.
-
-manejar_salto()
-Controla el salto del jugador con física de gravedad y parábola.
-
-update_game_state()
-Dibuja fondo, jugador, naves y balas.
-Actualiza posiciones de las balas.
-Detecta colisiones entre jugador y balas.
-Si colisión, reinicia el juego y vuelve al menú.
-
--Recolección de datos-
-guardar_datos_para_modelo(teclas)
-datos_modelo.append((vel_bala, dist_x, vel_bala2_y, dist_y, accion))
-
--Modo automático-
-def decision_auto():
-    global salto, en_suelo
-    if not modelo:
-        return
-
-    entrada = np.array([[
-        float(velocidad_bala_actual),
-        float(abs(jugador_rect.x - bala_rect.x)),
-        float(velocidad_bala2_y),
-        float(abs(jugador_rect.y - bala_rect2.y))
-    ]])
-
-    accion = modelo.predict(entrada)[0]
-    print(f"Acción predicha por KNN: {accion}")
-
-    if accion == 1:
-        jugador_rect.x = max(0, jugador_rect.x - velocidad_jugador)
-    elif accion == 2:
-        jugador_rect.x = min(w - jugador_rect.width, jugador_rect.x + velocidad_jugador)
-    elif accion == 3 and en_suelo:
+    # Si dice que saltemos Y estamos en el suelo, entonces saltamos
+    if prediccion == 1 and en_suelo:
         salto = True
         en_suelo = False
 
-Usa datos actuales del juego para predecir acción con el modelo.
-Ejecuta la acción predicha: mover izquierda, derecha o saltar.
+    return salto, en_suelo
 
--Entrenamiento-
-def entrenar_modelo_desde_datos():
-    global modelo
+# Esta función entrena un modelo KNN para decidir el movimiento horizontal
+def entrenar_knn_movimiento(datos_movimiento):
+    # Necesitamos suficientes datos para entrenar
+    if len(datos_movimiento) < 10:
+        print("Insuficientes datos para entrenar el modelo KNN de movimiento.")
+        return 10, 1  # Nota: esto parece un error, debería devolver None
 
-    datos_para_entrenamiento = []
-    if os.path.exists('datos_entrenamiento.pkl'):
-        with open('datos_entrenamiento.pkl', 'rb') as f:
-            datos_para_entrenamiento = pickle.load(f)
+    # Preparamos los datos de movimiento
+    datos = np.array(datos_movimiento)
+    X = datos[:, :8].astype('float32')  # 8 características (posiciones, distancias, etc.)
+    y = datos[:, 8].astype('int')       # La acción tomada (0=izq, 1=quieto, 2=der)
 
-    datos_para_entrenamiento = [d for d in datos_para_entrenamiento if len(d) == 5]
-    datos_para_entrenamiento.extend(datos_modelo)
+    # Dividimos los datos para entrenamiento y prueba
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    if not datos_para_entrenamiento:
-        print("No hay datos suficientes.")
+    # Creamos el modelo KNN para movimiento (también con 10 vecinos)
+    modelo_knn = KNeighborsClassifier(n_neighbors=10)
+    modelo_knn.fit(X_train, y_train)
+
+    # Vemos qué tan bien predice
+    accuracy = modelo_knn.score(X_test, y_test)
+    print(f"Precisión del modelo KNN de movimiento: {accuracy:.2f}")
+
+    return modelo_knn
+
+# Esta función usa el KNN entrenado para decidir hacia dónde moverse
+def decidir_movimiento_knn(jugador, bala_aire, modelo_knn_mov, salto, bala_suelo):
+    # Sin modelo, no podemos decidir
+    if modelo_knn_mov is None:
+        print("Modelo KNN de movimiento no entrenado.")
+        return None
+
+    # Calculamos la distancia a la bala del suelo
+    distancia_bala_suelo = abs(jugador.x - bala_suelo.x)
+
+    # Preparamos todas las características para el modelo
+    entrada = np.array([[jugador.x,                    # Posición X del jugador
+                         jugador.y,                    # Posición Y del jugador
+                         bala_aire.centerx,            # Posición X de bala aérea
+                         bala_aire.centery,            # Posición Y de bala aérea
+                         bala_suelo.x,                 # Posición X de bala del suelo
+                         bala_suelo.y,                 # Posición Y de bala del suelo
+                         distancia_bala_suelo,         # Distancia calculada
+                         1 if salto else 0             # Si está saltando o no
+                         ]], dtype='float32')
+
+    # El KNN busca situaciones similares y decide qué acción tomar
+    prediccion = modelo_knn_mov.predict(entrada)
+    accion = int(prediccion[0])  # 0=izquierda, 1=quieto, 2=derecha
+
+    # Ejecutamos la acción pero cuidando no salirse de los límites
+    if accion == 0 and jugador.x > 0:  # Moverse a la izquierda
+        jugador.x -= 5
+    elif accion == 2 and jugador.x < 200 - jugador.width:  # Moverse a la derecha
+        jugador.x += 5
+    else:  # Quedarse quieto (o si está en el borde)
         return
 
-    entradas = np.array([[d[0], d[1], d[2], d[3]] for d in datos_para_entrenamiento])
-    salidas = np.array([d[4] for d in datos_para_entrenamiento])
-
-    modelo = KNeighborsClassifier(n_neighbors=5)
-    modelo.fit(entradas, salidas)
-
-    with open(MODELO_PATH, 'wb') as f:
-        pickle.dump(modelo, f)
-    print("Modelo KNN entrenado y guardado.")
-
-Carga datos anteriores y combina con los nuevos.
-Prepara datos de entrada (X) y salida (y).
-Entrena una red neuronal simple con TensorFlow (2 capas ocultas).
-Guarda el modelo entrenado en disco (modelo_salto.keras).
-
--Bucle main-
-def main():
-    global salto, en_suelo, pausa
-    reloj = pygame.time.Clock()
-    correr = True
-    while correr:
-        if menu_activo:
-            mostrar_menu()
-
-        for evento in pygame.event.get():
-            if evento.type == pygame.QUIT:
-                correr = False
-            if evento.type == pygame.KEYDOWN:
-                if not menu_activo and not pausa:
-                    if evento.key == pygame.K_SPACE and en_suelo:
-                        salto = True
-                        en_suelo = False
-                    if evento.key == pygame.K_LEFT:
-                        jugador_rect.x = max(0, jugador_rect.x - velocidad_jugador)
-                    if evento.key == pygame.K_RIGHT:
-                        jugador_rect.x = min(w - jugador_rect.width, jugador_rect.x + velocidad_jugador)
-                if evento.key == pygame.K_p:
-                    pausa = not pausa
-                if evento.key == pygame.K_q:
-                    correr = False
-
-        teclas = pygame.key.get_pressed()
-
-        if not modo_auto:
-            if not teclas[pygame.K_LEFT] and not teclas[pygame.K_RIGHT]:
-                if jugador_rect.x > posicion_inicial_x:
-                    jugador_rect.x -= 2
-                elif jugador_rect.x < posicion_inicial_x:
-                    jugador_rect.x += 2
-
-        if not menu_activo and not pausa:
-            if modo_auto:
-                decision_auto()
-            if salto or (not en_suelo and jugador_rect.y < h - 100):
-                manejar_salto()
-            if not modo_auto:
-                guardar_datos_para_modelo(teclas)
-            if not bala_disparada:
-                disparar_bala()
-            if not bala_disparada2:
-                disparar_bala2()
-            update_game_state()
-
-        pygame.display.flip()
-        reloj.tick(30)
-
-    guardar_datos_a_archivo()
-    pygame.quit()
-
-Movimiento manual:
-Izquierda y derecha con flechas.
-Salto con barra espaciadora (si está en suelo).
-
-Si no hay input manual y no está en modo automático, el jugador vuelve poco a poco a su posición inicial.
-
-Si las balas no están activas, se disparan automáticamente con velocidades aleatorias.
+    return jugador.x, accion
