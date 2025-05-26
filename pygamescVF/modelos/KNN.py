@@ -2,8 +2,6 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 
-from sklearn.neighbors import KNeighborsClassifier
-
 def entrenar_knn_salto(datos_modelo):
     if len(datos_modelo) < 10:
         print("Insuficientes datos para entrenar el modelo KNN de salto.")
@@ -43,10 +41,10 @@ def decidir_salto_knn(jugador, bala, velocidad_bala, bala_aire, bala_disparada_a
 
     return salto, en_suelo
 
-def entrenar_knn_movimiento(datos_movimiento):
+def entrenar_knn_movimiento(datos_movimiento, jugador):
     if len(datos_movimiento) < 10:
         print("Insuficientes datos para entrenar el modelo KNN de movimiento.")
-        return 10, 1
+        return jugador.x, 1
 
     datos = np.array(datos_movimiento)
     X = datos[:, :8].astype('float32') 
@@ -87,7 +85,7 @@ def decidir_movimiento_knn(jugador, bala_aire, modelo_knn_mov, salto, bala_suelo
     elif accion == 2 and jugador.x < 200 - jugador.width:
         jugador.x += 5
     else:
-        return
+        jugador.x = jugador.x
 
     return jugador.x, accion
 

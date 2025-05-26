@@ -106,6 +106,6 @@ def decidir_movimiento_knn(jugador, bala_aire, modelo_knn_mov, salto, bala_suelo
     elif accion == 2 and jugador.x < 200 - jugador.width:  # Moverse a la derecha
         jugador.x += 5
     else:  # Quedarse quieto (o si está en el borde)
-        return
+        jugador.x += 0 
 
     return jugador.x, accion

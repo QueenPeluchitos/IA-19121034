@@ -86,6 +86,6 @@ def decidir_movimiento_arbol(jugador, bala_aire, arbol_movimiento, salto, bala_s
     elif accion == 2 and jugador.x < 200 - jugador.width:
         jugador.x += 5
     else:
-        return
+        jugador.x += 0  
 
     return jugador.x, accion

@@ -108,11 +108,9 @@ def decidir_movimiento_arbol(jugador, bala_aire, arbol_movimiento, salto, bala_s
     # Ejecutamos la acción pero con límites para no salirse de la pantalla
     if accion == 0 and jugador.x > 0:  # Moverse a la izquierda
         jugador.x -= 5
-        print("Izquierda")
     elif accion == 2 and jugador.x < 200 - jugador.width:  # Moverse a la derecha
         jugador.x += 5
-        print("Derecha (árbol)")
     else:  # Quedarse quieto (o si está en el borde)
-        print("Quieto (árbol)")
+        jugador.x += 0 
     
     return jugador.x, accion

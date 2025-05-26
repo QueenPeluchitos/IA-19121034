@@ -358,7 +358,7 @@ def mostrar_menu():
                     modo_knn = True
                     menu_activo = False
                     modelo_entrenado = entrenar_knn_salto(datos_modelo)
-                    modelo_entrenado_movimiento = entrenar_knn_movimiento(datos_movimiento)    
+                    modelo_entrenado_movimiento = entrenar_knn_movimiento(datos_movimiento, jugador)    
                 elif evento.key == pygame.K_q:
                     imprimir_datos()
                     pygame.quit()
